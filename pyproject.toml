@@ -1,0 +1,45 @@
+[project]
+name = "scache"
+version = "0.1.0"
+description = "Fetch selected Bitwarden secrets into a local chezmoi cache"
+readme = "README.md"
+authors = [
+    { name = "Lorant Vrinceanu", email = "lorant.vrinceanu@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+scache = "scache:main"
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.3",
+    "ty>=0.0.94",
+]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+extend-select = []
+extend-ignore = []
+
+unfixable = []
+# A file or directory to exclude from linting
+exclude = ["scratchpad.py"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --strict-config"
+testpaths = ["tests"]
