@@ -39,20 +39,28 @@ class SecretsCLI:
             prog=self.prog, description="Fetch selected secrets into local cache."
         )
 
-        sub = parser.add_subparsers(title="command", dest="command", required=True)
+        parser.add_argument(
+            "-v",
+            "--verbose",
+            action="store_true",
+            default=False,
+            help="show detailed information",
+        )
 
-        p_add = sub.add_parser(
+        cmds = parser.add_subparsers(title="command", dest="command", required=True)
+
+        cmd_add = cmds.add_parser(
             "install", help="Fetch secrets and write the local cache."
         )
-        p_add.set_defaults(func=self.cmd_install)
+        cmd_add.set_defaults(func=self.cmd_install)
 
-        p_diff = sub.add_parser(
+        cmd_diff = cmds.add_parser(
             "diff", help="Fetch secrets and compare against the local cache."
         )
-        p_diff.add_argument(
+        cmd_diff.add_argument(
             "--all", "-a", action="store_true", help="Include unchanged secrets."
         )
-        p_diff.set_defaults(func=self.cmd_diff)
+        cmd_diff.set_defaults(func=self.cmd_diff)
 
         return parser
 
@@ -61,7 +69,7 @@ class SecretsCLI:
 
     def run(self, argv: list[str] | None = None) -> int:
         args = self.parse_args(argv)
-
+        configure_logging(verbose=args.verbose)
         try:
             return int(args.func(args))
         except SecretsManagerError as exc:
@@ -81,6 +89,15 @@ class SecretsCLI:
             return 1
 
         return 0
+
+
+def configure_logging(*, verbose: bool) -> None:
+    logging.basicConfig(
+        format="{asctime} - {levelname} - {message}",
+        style="{",
+        level=logging.DEBUG if verbose else logging.WARNING,
+        stream=sys.stderr,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
