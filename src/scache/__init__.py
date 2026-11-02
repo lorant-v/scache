@@ -1,1 +1,3 @@
-from .scache import main as main
+from .scache import Manifest, main
+
+__all__ = ["Manifest", "main"]
