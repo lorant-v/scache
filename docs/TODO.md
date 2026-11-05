@@ -1,6 +1,11 @@
 - Write tests
 - Bitwarden
   - Check if vault open
+- Add reset command
+- Pre-commit hooks
 - Distribute as package
   - Structure into separate modules
   - (Optional) Use a json query library to extend support for Bitwarden fields
+- Clarify manifest and composed types architecture (single/separate)
+    - Goal: extend only in one place
+    - Maybe use as manifest example
