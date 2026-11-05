@@ -6,16 +6,8 @@ from scache.scache import (
   DEFAULT_OUTPUT_PATH,
   DEFAULT_PROVIDER,
   Secret,
+  UserManifest,
 )
-
-VALID_WITH_OUTPUT = {
-  "default_provider": "bitwarden",
-  "secrets": [
-    {"ref": "uuid-1#notes", "out": "secrets.ssh.id_ed25519"},
-    {"ref": "uuid-2#login.password", "out": "secrets.app.password"},
-  ],
-  "output": {"format": "json", "destination": ".chezmoidata/secrets.json"},
-}
 
 
 def test_parses_secrets_with_defaults():
@@ -26,14 +18,14 @@ def test_parses_secrets_with_defaults():
     ],
   }
 
-  manifest = Manifest.from_json(json.dumps(data))
+  user_manifest = UserManifest.from_json(json.dumps(data))
+  manifest = Manifest.from_user_manifest(user_manifest)
 
-  assert manifest.default_provider == DEFAULT_PROVIDER
   assert (
     Secret(
       ref="uuid-1#notes",
       out="secrets.ssh.id_ed25519",
-      provider=manifest.default_provider,
+      provider=DEFAULT_PROVIDER,
     )
     in manifest.secrets
   )
@@ -41,7 +33,7 @@ def test_parses_secrets_with_defaults():
     Secret(
       ref="uuid-2#login.password",
       out="secrets.app.password",
-      provider=manifest.default_provider,
+      provider=DEFAULT_PROVIDER,
     )
     in manifest.secrets
   )
@@ -50,22 +42,23 @@ def test_parses_secrets_with_defaults():
 
 
 def test_parses_secrets_with_default_provider():
+  default_provider = "1password"
   data = {
-    "default_provider": "1password",
+    "default_provider": default_provider,
     "secrets": [
       {"ref": "uuid-1#notes", "out": "secrets.ssh.id_ed25519"},
       {"ref": "uuid-2#login.password", "out": "secrets.app.password"},
     ],
   }
 
-  manifest = Manifest.from_json(json.dumps(data))
+  user_manifest = UserManifest.from_json(json.dumps(data))
+  manifest = Manifest.from_user_manifest(user_manifest)
 
-  assert manifest.default_provider == "1password"
   assert (
     Secret(
       ref="uuid-1#notes",
       out="secrets.ssh.id_ed25519",
-      provider=manifest.default_provider,
+      provider=default_provider,
     )
     in manifest.secrets
   )
@@ -73,7 +66,7 @@ def test_parses_secrets_with_default_provider():
     Secret(
       ref="uuid-2#login.password",
       out="secrets.app.password",
-      provider=manifest.default_provider,
+      provider=default_provider,
     )
     in manifest.secrets
   )
@@ -94,14 +87,14 @@ def test_parses_secrets_with_given_provider():
     ],
   }
 
-  manifest = Manifest.from_json(json.dumps(data))
+  user_manifest = UserManifest.from_json(json.dumps(data))
+  manifest = Manifest.from_user_manifest(user_manifest)
 
-  assert manifest.default_provider == "bitwarden"
   assert (
     Secret(
       ref="uuid-1#notes",
       out="secrets.ssh.id_ed25519",
-      provider=manifest.default_provider,
+      provider="bitwarden",
     )
     in manifest.secrets
   )
@@ -131,14 +124,14 @@ def test_parses_secrets_with_given_output():
     "output": {"path": ".chezmoidata/scache.yaml", "format": "yaml"},
   }
 
-  manifest = Manifest.from_json(json.dumps(data))
+  user_manifest = UserManifest.from_json(json.dumps(data))
+  manifest = Manifest.from_user_manifest(user_manifest)
 
-  assert manifest.default_provider == "bitwarden"
   assert (
     Secret(
       ref="uuid-1#notes",
       out="secrets.ssh.id_ed25519",
-      provider=manifest.default_provider,
+      provider="bitwarden",
     )
     in manifest.secrets
   )
