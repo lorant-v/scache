@@ -1,8 +1,7 @@
 # scache
-Fetch selected Bitwarden secrets into a local chezmoi cache.
+Fetch selected secrets into a local chezmoi cache.
 
-Writes a generated cache (`.chezmoidata/secrets.yaml` in the chezmoi source) of secrets
-that chezmoi can read as data.
+Writes a generated cache (`.chezmoidata/secrets.yaml` in the chezmoi source) of secrets that chezmoi can read as data.
 
 ## Requirements
 

@@ -492,7 +492,7 @@ class SecretsCLI:
 
   def build_parser(self) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-      prog=self.prog, description="Fetch selected secrets into local cache."
+      prog=self.prog, description="Fetch selected secrets into a local chezmoi cache."
     )
 
     parser.add_argument(
