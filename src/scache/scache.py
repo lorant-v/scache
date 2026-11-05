@@ -104,7 +104,7 @@ def get_path(document: Mapping[str, object], path: str):
 
 
 def set_path(document: dict[str, object], path: str, value: object):
-  """
+  """Write a value into a nested mapping at a dotted path.
   For an out of "secrets.app.password", the result is:
   {
     "secrets": {
@@ -230,14 +230,6 @@ class Provider(Protocol):
   def fetch_all(self, secrets: Sequence[Secret]) -> Mapping[Secret, object]: ...
 
 
-def split_bitwarden_ref(ref: str) -> tuple[str, str]:
-  """Split '<item>#<dot-path>' into (item, path)"""
-  item, sep, path = ref.partition("#")
-  if not item or not sep or not path:
-    raise ScacheError(f"Invalid Bitwarden ref {ref!r}; expected '<item>#<dot-path>'")
-  return item, path
-
-
 class BitwardenProvider:
   name = "bitwarden"
 
@@ -250,6 +242,13 @@ class BitwardenProvider:
     self._run = run
     self._which = which
 
+  def split_bitwarden_ref(self, ref: str) -> tuple[str, str]:
+    """Split '<item>#<dot-path>' into (item, path)"""
+    item, sep, path = ref.partition("#")
+    if not item or not sep or not path:
+      raise ScacheError(f"Invalid Bitwarden ref {ref!r}; expected '<item>#<dot-path>'")
+    return item, path
+
   def is_available(self) -> bool:
     return self._which("bw") is not None
 
@@ -257,7 +256,7 @@ class BitwardenProvider:
     return {secret: self._fetch_single(secret) for secret in secrets}
 
   def _fetch_single(self, secret: Secret) -> object:
-    item, path = split_bitwarden_ref(secret.ref)
+    item, path = self.split_bitwarden_ref(secret.ref)
     result = self._run("bw", "get", "item", item, "--raw", stdout=subprocess.PIPE)
     try:
       payload = json.loads(result.stdout)
@@ -324,8 +323,13 @@ class Cache:
     self.path = path
     self._writer = writer
 
-  def read(self, text: str):
-    pass
+  def read(self) -> dict[str, object]:
+    if not self.path.exists():
+      return {}
+    try:
+      return self._writer.parse(self.path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+      raise ScacheError(f"Cannot read cache: {self.path}") from exc
 
   def write(self, document: Mapping[str, object]):
     self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -346,6 +350,32 @@ def render_cache(
     set_path(document, secret.out, value)
 
   return document
+
+
+def flatten(document: Mapping[str, object], prefix="") -> dict[str, object]:
+  """Flatten a nested mapping into dotted keys
+  For an document like
+  {
+    "secrets": {
+      "app": {
+        "password": "the fetched value"
+      }
+    }
+  }
+  the output is
+  {
+    "secrets.app.password": "the fetched value"
+  }
+  """
+  flat: dict[str, object] = {}
+  for key, value in document.items():
+    path = f"{prefix}{key}"
+    if isinstance(value, Mapping):
+      flat.update(flatten(value, path + "."))
+    else:
+      flat[path] = value
+
+  return flat
 
 
 class SecretsCacheManager:
@@ -372,8 +402,18 @@ class SecretsCacheManager:
     cache.write(render_cache(self._manifest, secrets))
     return cache.path
 
-  def diff(self):
-    pass
+  def diff(self) -> dict[str, tuple[object | None, object | None]]:
+    self._require_environment()
+    cache = self._cache()
+    current = flatten(cache.read())
+
+    secrets = self._fetch_secrets()
+    desired = flatten(render_cache(self._manifest, secrets))
+
+    return {
+      key: (current.get(key), desired.get(key))
+      for key in desired.keys() | current.keys()
+    }
 
   def _cache(self) -> Cache:
     return Cache(self._source_dir / self._manifest.output.path, self._writer)
@@ -421,7 +461,7 @@ class SecretsCacheManager:
 
     return grouped
 
-  def _fetch_secrets(self) -> Mapping[Secret, object]:
+  def _fetch_secrets(self) -> dict[Secret, object]:
     secrets_values = {}
     secrets_grouped = self._group_secrets()
 
@@ -431,6 +471,17 @@ class SecretsCacheManager:
       secrets_values.update(provider.fetch_all(secrets))
 
     return secrets_values
+
+
+def marker(entry: tuple[object | None, object | None]) -> str:
+  current, desired = entry
+  if current == desired:
+    return "="
+  elif current is None:
+    return "+"
+  elif desired is None:
+    return "-"
+  return "~"
 
 
 class SecretsCLI:
@@ -503,16 +554,25 @@ class SecretsCLI:
   # commands
   def cmd_install(self, args: argparse.Namespace, manager: SecretsCacheManager):
     cache_path = manager.install()
-    logger.info(f"Cache installed at {cache_path}; run chezmoi apply")
+    logger.info(f"Cache installed at {cache_path}. Run chezmoi apply.")
     return 0
 
   def cmd_diff(self, args: argparse.Namespace, manager: SecretsCacheManager):
-    logger.info("Comparing cache")
+    entries = manager.diff()
+    changed = [key for key, entry in entries.items() if entry[0] != entry[1]]
 
-    if manager.diff():
-      return 1
+    if args.all:
+      for key in sorted(entries):
+        print(f"{marker(entries[key])} {key}", file=sys.stdout)
+    else:
+      for key in sorted(changed):
+        print(key, file=sys.stdout)
 
-    return 0
+    if changed:
+      logger.info(f"Cache is out of date. Run {self.prog} install.")
+      return int(ExitCode.DIFF)
+    logger.info("Cache is up to date.")
+    return int(ExitCode.OK)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -524,23 +584,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
   raise SystemExit(main())
-
-"""Temp dev notes
-# Handling manifest 
-- Simplest approach would be to use a single model for Secret/Output/Manifest
-- Allowing user to define a default_provider creates inheritance between the 
-  secret.provider and default_provider which needs to be resolved
-- Ideally the application should not need to care about looking for the "correct"
-  provider for a secret. This could be done at the provider grouping step but it leaks
-  responsibility outside of the Manifest.
-- In order to keep this normalization step a Manifest concern, we could
-  1. Parse and modify the .secrets in json before dataclass conversion
-  2. Modify .secrets after dataclass conversion (in place)
-  3. Create a "resolved"/app model, which is separate from the user model.
-- Initially option 2 was implemented, but a dataclass needs to be frozen in order for it
-  to be hashable, thus used as a key in a dict. This is not strictly necessary but makes
-  the split of responsibilities cleaner.
-- Switched over to option 3, which requires more maintenance in case of a Manifest
-  change (rare) but brings the benefit of a clear separation between the user model and
-  the app model
-"""
