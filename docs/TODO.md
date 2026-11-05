@@ -1,0 +1,6 @@
+- Write tests
+- Bitwarden
+  - Check if vault open
+- Distribute as package
+  - Structure into separate modules
+  - (Optional) Use a json query library to extend support for Bitwarden fields
